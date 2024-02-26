@@ -1,0 +1,21 @@
+# Definizione della risorsa per il dataset BigQuery per l'esposizione dei dati
+resource "google_bigquery_dataset" "exposure_dataset" {
+  dataset_id                  = var.exposure_dataset_id
+  location                    = "US"  # Imposta la località desiderata, ad esempio "US" per Iowa
+  default_table_expiration_ms = "2592000000"  # 30 giorni (il tempo di scadenza predefinito per le tabelle)
+}
+
+# Definizione della risorsa per il ruolo del progetto per Data Studio
+resource "google_data_studio_project" "exposure_project" {
+  display_name = "Data Studio Project for Exposure"
+}
+
+# Output per l'ID del dataset BigQuery per l'esposizione dei dati
+output "exposure_dataset_id" {
+  value = google_bigquery_dataset.exposure_dataset.dataset_id
+}
+
+# Output per l'ID del progetto Data Studio
+output "exposure_data_studio_project_id" {
+  value = google_data_studio_project.exposure_project.id
+}

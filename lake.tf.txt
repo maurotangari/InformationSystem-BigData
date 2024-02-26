@@ -1,0 +1,82 @@
+# Definizione del bucket Cloud Storage per il livello L0 del Data Lakehouse
+resource "google_storage_bucket" "raw_data_bucket" {
+  name     = var.raw_data_bucket_name
+  location = var.region
+
+  versioning {
+    enabled = true
+  }
+
+  lifecycle_rule {
+    action {
+      type = "SetStorageClass"
+      storage_class = "NEARLINE"
+    }
+    condition {
+      age = 30
+    }
+  }
+}
+
+# Configurazione dell'istanza Cloud SQL per il livello L1 del Data Lakehouse
+resource "google_sql_database_instance" "relational_db_instance" {
+  name             = var.relational_db_instance_name
+  database_version = "MYSQL_5_7"
+  region           = var.cloud_sql_location
+  project          = var.project_id
+
+  settings {
+    tier = "db-f1-micro"
+
+    backup_configuration {
+      enabled = true
+      binary_log_enabled = true
+      start_time = "16:00"
+    }
+
+    database_flags {
+      name  = "log_bin_trust_function_creators"
+      value = "on"
+    }
+  }
+}
+
+# Configurazione del dataset BigQuery per il livello L2 del Data Lakehouse
+resource "google_bigquery_dataset" "analytic_dataset" {
+  dataset_id                  = var.analytic_dataset_id
+  location                    = var.bigquery_location
+  default_table_expiration_ms = 3600000
+
+  access {
+    role_entity = "WRITER"
+    user_by_email {
+      email = "user@example.com"
+    }
+  }
+
+  labels = {
+    environment = "production"
+    sensitivity = "high"
+  }
+}
+
+# Impostazione delle politiche di sicurezza di base per il livello L2 del Data Lakehouse
+resource "google_bigquery_iam_binding" "dataset_iam_binding" {
+  dataset_id = google_bigquery_dataset.analytic_dataset.dataset_id
+  role       = "roles/bigquery.dataOwner"
+
+  members = [
+    "serviceAccount:${google_service_account.manipulation_service_account.email}",
+  ]
+}
+
+# Configurazione delle etichette di sicurezza per il dataset BigQuery
+resource "google_bigquery_resource_label" "analytic_dataset_labels" {
+  resource_type = "dataset"
+  resource_id   = google_bigquery_dataset.analytic_dataset.dataset_id
+
+  labels = {
+    environment = "production"
+    sensitivity = "high"
+  }
+}

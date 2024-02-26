@@ -1,0 +1,154 @@
+# Copyright 2023 Google LLC.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Creazione di un nuovo bucket di Google Cloud Storage per il data manipulation
+resource "google_storage_bucket" "manipulation_bucket" {
+  name     = "manipulation-bucket-example"
+  location = "EUROPE-WEST1"  # La posizione viene impostata su Milan (EUROPE-WEST1)
+  force_destroy = true        # Questa impostazione permette la rimozione automatica dei dati quando il bucket viene eliminato
+}
+
+# Impostazione delle autorizzazioni per rendere il bucket pubblico
+resource "google_storage_bucket_iam_member" "manipulation_bucket_public" {
+  bucket = google_storage_bucket.manipulation_bucket.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"  # Concede accesso di visualizzazione a tutti gli utenti
+}
+
+# [START storage_hmac_key]
+# Creazione di un nuovo account di servizio
+resource "google_service_account" "manipulation_service_account" {
+  account_id = "my-manipulation-svc-acc"
+}
+
+# Creazione della chiave HMAC per il service account associato
+resource "google_storage_hmac_key" "manipulation_key" {
+  service_account_email = google_service_account.manipulation_service_account.email
+}
+# [END storage_hmac_key]
+
+# [START storage_new_bucket_parent_tag]
+# [START storage_create_new_bucket_tf]
+# Creazione di un nuovo storage bucket in eu-west1 (Milan)
+# con classe di archiviazione Coldline
+resource "random_id" "manipulation_bucket_prefix" {
+  byte_length = 8
+}
+
+resource "google_storage_bucket" "manipulation_static" {
+  name          = "${random_id.manipulation_bucket_prefix.hex}-manipulation-bucket"
+  location      = "eu-west1"
+  storage_class = "COLDLINE"
+
+  uniform_bucket_level_access = true
+}
+# [END storage_create_new_bucket_tf]
+
+# [START storage_upload_object_tf]
+# Creazione di un oggetto di testo in Cloud Storage
+resource "google_storage_bucket_object" "manipulation_default" {
+  name         = "new-manipulation-object"
+  content      = "Data as string to be uploaded"
+  content_type = "text/plain"
+  bucket       = google_storage_bucket.manipulation_static.id
+}
+# [END storage_upload_object_tf]
+
+# [START storage_get_object_metadata_tf]
+# Ottenimento dei metadati dell'oggetto
+data "google_storage_bucket_object" "manipulation_default" {
+  name   = google_storage_bucket_object.manipulation_default.name
+  bucket = google_storage_bucket.manipulation_static.id
+}
+
+output "object_metadata" {
+  value = data.google_storage_bucket_object.manipulation_default
+}
+# [END storage_get_object_metadata_tf]
+
+# [START storage_get_bucket_metadata_tf]
+# Ottenimento dei metadati del bucket
+data "google_storage_bucket" "manipulation_default" {
+  name = google_storage_bucket.manipulation_static.id
+}
+
+output "bucket_metadata" {
+  value = data.google_storage_bucket.manipulation_default
+}
+# [END storage_get_bucket_metadata_tf]
+# [END storage_new_bucket_parent_tag]
+
+# Creazione di un servizio Cloud Endpoint
+resource "google_endpoints_service" "manipulation_api_service" {
+  service_name = "manipulation-api-service-${random_id.manipulation_endpoint_suffix.hex}"
+  openapi_config = file("path/to/openapi/spec.yaml")
+}
+
+# Definizione delle autorizzazioni per il servizio Cloud Endpoint
+resource "google_endpoints_service_iam_policy" "manipulation_api_service_policy" {
+  service = google_endpoints_service.manipulation_api_service.service_name
+
+  policy_data = <<EOF
+{
+  "bindings": [
+    {
+      "role": "roles/endpoints.portalViewer",
+      "members": [
+        "user:${random_string.manipulation_user_email}",
+        "group:${random_string.manipulation_group_name}"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+# Generazione di stringhe casuali per gli identificatori
+# random_id.manipulation_endpoint_suffix genera un suffisso casuale per il nome del servizio Cloud Endpoint.
+# random_string.manipulation_user_email e random_string.manipulation_group_name generano nomi casuali per gli indirizzi email degli utenti e per i nomi dei gruppi,
+# che vengono quindi utilizzati come membri nelle autorizzazioni del servizio Cloud Endpoint.
+resource "random_id" "manipulation_endpoint_suffix" {
+  byte_length = 4
+}
+
+resource "random_string" "manipulation_user_email" {
+  length = 10
+  special = false
+}
+
+resource "random_string" "manipulation_group_name" {
+  length = 8
+  special = false
+}
+
+# Creazione di un job Dataflow
+resource "google_dataflow_job" "manipulation_dataflow_job" {
+  name             = "manipulation-dataflow-job"
+  project          = data.google_project.project.project_id
+  region           = "us-central1"
+  temp_gcs_location = "gs://${google_storage_bucket.manipulation_static.name}/temp"
+  
+  template_gcs_path = "gs://dataflow-templates/latest/Word_Count"
+  
+  parameters = {
+    inputFile  = "gs://${google_storage_bucket.manipulation_static.name}/input/input.txt"
+    outputFile = "gs://${google_storage_bucket.manipulation_static.name}/output/wordcount"
+  }
+}
+
+# Abilita l'API Dataflow
+resource "google_project_service" "dataflow" {
+  project = data.google_project.project.project_id
+  service = "dataflow.googleapis.com"
+}

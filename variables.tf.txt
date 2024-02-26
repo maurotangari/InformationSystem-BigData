@@ -1,0 +1,159 @@
+variable "project_id" {
+  description = "ID del progetto Google Cloud"
+  default     = "your-project-id"  # Inserisci qui l'ID del tuo progetto
+}
+
+variable "region" {
+  description = "Regione di Google Cloud in cui creare le risorse"
+  default     = "europe-west3"  # Imposta la regione desiderata, ad esempio "europe-west3" per Milan
+}
+
+variable "data_landing_bucket_name" {
+  description = "Nome del bucket Cloud Storage per il Data Landing"
+  default     = "landing-bucket-example"  # Nome del bucket per il data landing
+}
+
+variable "custom_api_service_name" {
+  description = "Nome del servizio Cloud Endpoints per l'API personalizzata"
+}
+
+variable "etl_pipeline_job_name" {
+  description = "Nome del job di Dataflow per le ETL Data Pipelines"
+}
+
+variable "composer_environment_name" {
+  description = "Nome dell'ambiente Composer per l'orchestrazione del flusso di lavoro"
+}
+
+variable "raw_data_bucket_name" {
+  description = "Nome del bucket Cloud Storage per il livello L0 del Data Lakehouse"
+}
+
+variable "relational_db_instance_name" {
+  description = "Nome dell'istanza del database Cloud SQL per il livello L1 del Data Lakehouse"
+}
+
+variable "cloud_sql_instance_name" {
+  description = "Nome dell'istanza Cloud SQL per il livello L1 del Data Lakehouse"
+  default     = "db-standard-1"
+}
+
+variable "cloud_sql_location" {
+  description = "Località dell'istanza Cloud SQL"
+  default     = "europe-west1"  # Imposta la località desiderata, ad esempio "europe-west1" per Milan
+}
+
+variable "cloud_sql_instance_hours_per_month" {
+  description = "Ore totali al mese per l'istanza Cloud SQL"
+  default     = 730.0
+}
+
+variable "cloud_sql_instance_type_cost_per_hour" {
+  description = "Costo per ora per il tipo di istanza Cloud SQL"
+  default     = 49.31
+}
+
+variable "cloud_sql_storage_cost_per_gb_month" {
+  description = "Costo per gigabyte di archiviazione SSD per l'istanza Cloud SQL"
+  default     = 0.17  # Prezzo indicativo basato sul costo mensile di 116.28 USD per 684 GiB
+}
+
+variable "analytic_dataset_id" {
+  description = "ID del dataset BigQuery per il livello L2 del Data Lakehouse"
+}
+
+variable "exposure_dataset_id" {
+  description = "ID del dataset BigQuery per l'esposizione dei dati"
+}
+
+variable "custom_ml_model_name" {
+  description = "Nome del modello di machine learning su AI Platform"
+}
+
+# Definizione delle variabili per i dati numerici forniti
+variable "average_customers" {
+  description = "Numero medio di clienti"
+  default     = 450000
+}
+
+variable "average_customer_record_size_kb" {
+  description = "Dimensione media dei dati di registrazione del cliente per ogni cliente (in KB)"
+  default     = 50
+}
+
+variable "average_daily_customer_events" {
+  description = "Numero medio di eventi dei clienti in tempo reale al giorno"
+  default     = 5000
+}
+
+variable "average_event_size_kb" {
+  description = "Dimensione media di ogni evento (in KB)"
+  default     = 40
+}
+
+variable "average_price_data_csv_size_mb" {
+  description = "Dimensione media del file CSV dei dati sui prezzi (in MB)"
+  default     = 100
+}
+
+# Calcolo dello spazio di archiviazione necessario per i dati dei clienti
+locals {
+  customer_data_size_gb = (var.average_customers * var.average_customer_record_size_kb) / 1024
+}
+
+# Calcolo dello spazio di archiviazione necessario per gli eventi dei clienti in tempo reale
+locals {
+  daily_event_data_size_gb = (var.average_daily_customer_events * var.average_event_size_kb * 30) / (1024 * 1024)
+}
+
+# Calcolo dello spazio di archiviazione necessario per il file CSV dei dati sui prezzi
+locals {
+  price_data_size_gb = var.average_price_data_csv_size_mb / 1024
+}
+
+# Calcolo del totale dello spazio di archiviazione necessario
+locals {
+  total_storage_size_gb = local.customer_data_size_gb + local.daily_event_data_size_gb + local.price_data_size_gb
+}
+
+# Definizione della variabile per il costo dello spazio di archiviazione al mese (tariffa di esempio)
+variable "storage_cost_per_gb_month" {
+  description = "Costo per gigabyte di archiviazione al mese"
+  default     = 0.02
+}
+
+# Calcolo del costo totale dello spazio di archiviazione al mese
+locals {
+  total_storage_cost_monthly = local.total_storage_size_gb * var.storage_cost_per_gb_month
+}
+
+# Calcolo del tempo di utilizzo (usage time) del file manipulation.tf
+locals {
+  manipulation_usage_time_hours = 30 * 1  # 1 ora al giorno per 30 giorni
+}
+
+# Definizione delle variabili per i dati numerici forniti per Google Cloud Dataflow
+variable "dataflow_job_data_processed_gb" {
+  description = "Quantità totale di dati processati dal job Dataflow in GB al giorno"
+  default     = 21.74
+}
+
+variable "dataflow_job_hours_per_month" {
+  description = "Numero di ore in cui il job Dataflow viene eseguito al mese"
+  default     = 30
+}
+
+variable "dataflow_job_num_worker_nodes" {
+  description = "Numero di nodi worker utilizzati dal job Dataflow"
+  default     = 2
+}
+
+variable "dataflow_job_worker_instance_type" {
+  description = "Tipo di istanza dei nodi worker utilizzati dal job Dataflow"
+  default     = "n1-standard-1"
+}
+
+variable "dataflow_job_worker_pd_size_gb" {
+  description = "Dimensione dello storage persistente disponibile per i nodi worker del job Dataflow"
+  default     = 200
+}

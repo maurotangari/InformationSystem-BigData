@@ -1,0 +1,58 @@
+# Definizione della risorsa per il modello di Machine Learning su AI Platform
+resource "google_ml_model" "custom_ml_model" {
+  name                = var.custom_ml_model_name
+  region              = "europe-west3"  # Milan region
+  description         = "Modello personalizzato per il consumo di AI Platform"
+  online_prediction   = {}
+  logging_config      = {
+    # Configurazione del logging
+    gcs_log_uri = "gs://${var.raw_data_bucket_name}/ml_logs/"
+  }
+}
+
+# Definizione della risorsa per il job di addestramento del modello su AI Platform
+resource "google_ml_job" "training_job" {
+  name                = "training-job-example"
+  region              = "europe-west3"  # Milan region
+  display_name        = "Training Job Example"
+  training_input {
+    scale_tier        = "BASIC"  # Livello di scalabilità del job di addestramento
+    job_dir           = "gs://${var.raw_data_bucket_name}/training_output/"  # Directory di output per il job di addestramento
+    master_type       = "n1-standard-4"  # Tipo di istanza per il nodo master
+    worker_type       = "n1-standard-4"  # Tipo di istanza per i nodi worker
+    parameter_server_type = "n1-standard-4"  # Tipo di istanza per i nodi di server dei parametri
+    worker_count      = 3  # Numero di nodi worker
+    parameter_server_count = 1  # Numero di nodi di server dei parametri
+    package_uris      = ["gs://ml-pipeline-playground/tfmodel-analysis/taxifare.tar.gz"]  # URI del pacchetto contenente il modello
+    python_module     = "trainer.task"  # Modulo Python contenente la logica del training
+    args              = ["--train-steps", "1000"]
+  }
+}
+
+# Definizione della risorsa per la versione del modello su AI Platform
+resource "google_ml_model_version" "model_version" {
+  model               = google_ml_model.custom_ml_model.name
+  region              = "europe-west3"  # Milan region
+  version             = "v1"
+  deployment_uri      = "gs://${var.raw_data_bucket_name}/model/"  # URI del modello addestrato
+  runtime_version     = "2.4"  # Versione di TensorFlow utilizzata nel modello
+  machine_type        = "mls1-c1-m2"  # Tipo di macchina virtuale utilizzato per il servizio di previsione
+}
+
+# Definizione della risorsa per il servizio di previsione online su AI Platform
+resource "google_ml_engine_model_endpoint" "online_prediction_endpoint" {
+  project             = var.project_id
+  display_name        = "online-prediction-endpoint"
+  region              = "europe-west3"  # Milan region
+  model               = google_ml_model.custom_ml_model.name
+  traffic_split {
+    # Configurazione della suddivisione del traffico
+    version = google_ml_model_version.model_version.name
+    percent = 100
+  }
+}
+
+# Output per l'endpoint del servizio di previsione online
+output "online_prediction_endpoint" {
+  value = google_ml_engine_model_endpoint.online_prediction_endpoint.name
+}
